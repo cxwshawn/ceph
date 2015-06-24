@@ -43,7 +43,7 @@ struct Cap {
 
 struct CapSnap {
   //snapid_t follows;  // map key
-  Inode *in;
+  InodeRef in;
   SnapContext context;
   int issued, dirty;
 
