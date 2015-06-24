@@ -1124,20 +1124,25 @@ void CInode::store_backtrace(MDSInternalContextBase *fin, int op_prio)
   auth_pin(this);
 
   int64_t pool;
-  if (is_dir())
+  if (is_dir()) {
     pool = mdcache->mds->mdsmap->get_metadata_pool();
-  else
+  } else {
     pool = inode.layout.fl_pg_pool;
+  }
 
   inode_backtrace_t bt;
   build_backtrace(pool, bt);
-  bufferlist bl;
-  ::encode(bt, bl);
+  bufferlist parent_bl;
+  ::encode(bt, parent_bl);
 
   ObjectOperation op;
   op.priority = op_prio;
   op.create(false);
-  op.setxattr("parent", bl);
+  op.setxattr("parent", parent_bl);
+
+  bufferlist layout_bl;
+  ::encode(inode.layout, layout_bl);
+  op.setxattr("layout", layout_bl);
 
   SnapContext snapc;
   object_t oid = get_object_name(ino(), frag_t(), "");
@@ -1165,7 +1170,16 @@ void CInode::store_backtrace(MDSInternalContextBase *fin, int op_prio)
     ObjectOperation op;
     op.priority = op_prio;
     op.create(false);
-    op.setxattr("parent", bl);
+
+    // Update parent linkage in old pool so that by-inode resolvers can
+    // still find correct path (and thereby see layout pointing to
+    // new pool after by-path lookup)
+    op.setxattr("parent", parent_bl);
+
+    // Update layout in old pool so that when pool changes in layout,
+    // recovery tools can infer that the old pool header is to be ignored
+    // because its layout specifies a different pool than this old one.
+    op.setxattr("layout", layout_bl);
 
     object_locator_t oloc(*p);
     mdcache->mds->objecter->mutate(oid, oloc, op, snapc, ceph_clock_now(g_ceph_context),
