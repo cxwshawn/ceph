@@ -117,7 +117,7 @@ public:
   void dump(ceph::Formatter *f) {
     m_object->dump(f);
   }
-  void generate() {
+  virtual void generate() {
     T::generate_test_instances(m_list);
   }
   int num_generated() {
@@ -261,12 +261,15 @@ int main(int argc, const char **argv)
 #define TYPE_FEATUREFUL(t) dencoders[T_STRINGIFY(t)] = new DencoderImplFeatureful<t>(false);
 #define TYPE_FEATUREFUL_STRAYDATA(t) dencoders[T_STRINGIFY(t)] = new DencoderImplFeatureful<t>(true);
 #define TYPE_NOCOPY(t) dencoders[T_STRINGIFY(t)] = new DencoderImplNoFeatureNoCopy<t>(false);
+#define TYPE_CSTYLE(t) dencoders[T_STRINGIFY(t)] = new DencoderImplCStyle<t>(false);
 #define MESSAGE(t) dencoders[T_STRINGIFY(t)] = new MessageDencoderImpl<t>;
 #include "types.h"
 #undef TYPE
 #undef TYPEWITHSTRAYDATA
 #undef TYPE_FEATUREFUL
 #undef TYPE_FEATUREFUL_STRAYDATA
+#undef TYPE_NOCOPY
+#undef TYPE_CSTYLE
 #undef T_STR
 #undef T_STRINGIFY
 

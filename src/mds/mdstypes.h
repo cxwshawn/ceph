@@ -1577,7 +1577,24 @@ inline std::ostream& operator<<(std::ostream& out, mdsco_db_line_prefix o) {
   return out;
 }
 
+class ceph_file_layout_wrapper : public ceph_file_layout
+{
+  void encode(bufferlist &bl) const
+  {
+    ::encode(static_cast<ceph_file_layout>(*this), bl);
+  }
 
+  void decode(bufferlist::iterator &p)
+  {
+    ::decode(static_cast<ceph_file_layout>(*this), p);
+  }
+
+  void generate_test_instances(std::list<ceph_file_layout_wrapper*>& ls)
+  {
+  }
+
+  void dump(Formatter *f) const;
+};
 
 
 
