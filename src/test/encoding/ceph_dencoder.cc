@@ -29,7 +29,6 @@
 #define TYPE_FEATUREFUL(t)
 #define TYPE_FEATUREFUL_STRAYDATA(t)
 #define TYPE_NOCOPY(t)
-#define TYPE_CSTYLE(t)
 #define MESSAGE(t)
 #include "types.h"
 #undef TYPE
@@ -37,7 +36,6 @@
 #undef TYPE_FEATUREFUL
 #undef TYPE_FEATUREFUL_STRAYDATA
 #undef TYPE_NOCOPY
-#undef TYPE_CSTYLE
 #undef MESSAGE
 
 #define MB(m) ((m) * 1024 * 1024)
@@ -97,7 +95,7 @@ public:
     delete m_object;
   }
 
-  virtual string decode(bufferlist bl, uint64_t seek) {
+  string decode(bufferlist bl, uint64_t seek) {
     bufferlist::iterator p = bl.begin();
     p.seek(seek);
     try {
@@ -146,35 +144,6 @@ public:
   virtual void encode(bufferlist& out, uint64_t features) {
     out.clear();
     this->m_object->encode(out);
-  }
-};
-
-
-template<class T>
-class DencoderImplCStyle : public DencoderBase<T> {
-public:
-  DencoderImplNoFeatureNoCopy(bool stray_ok)
-    : DencoderBase<T>(stray_ok) {}
-  virtual void encode(bufferlist& out, uint64_t features) {
-    out.clear();
-    ::encode(*(this->m_object), out);
-  }
-
-  virtual string decode(bufferlist bl, uint64_t seek) {
-    bufferlist::iterator p = bl.begin();
-    p.seek(seek);
-    try {
-      ::decode(*m_object, p);
-    }
-    catch (buffer::error& e) {
-      return e.what();
-    }
-    if (!stray_okay && !p.end()) {
-      ostringstream ss;
-      ss << "stray data at end of buffer, offset " << p.get_off();
-      return ss.str();
-    }
-    return string();
   }
 };
 

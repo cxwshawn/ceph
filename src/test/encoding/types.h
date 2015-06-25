@@ -170,9 +170,6 @@ TYPE(inode_backtrace_t)
 TYPE(inode_backpointer_t)
 TYPE(quota_info_t)
 
-#include "include/ceph_fs.h"
-TYPE_CSTYLE(ceph_file_layout)
-
 #include "mds/CInode.h"
 TYPE(InodeStore)
 
