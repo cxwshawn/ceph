@@ -30,6 +30,7 @@
 
 #define DEFAULT_USER_AGENT "rest-bench"
 #define DEFAULT_BUCKET "rest-bench-bucket"
+#define DEFAULT_RUN_NAME "obj-name"
 
 void usage(ostream& out)
 {
@@ -61,7 +62,9 @@ void usage(ostream& out)
 "   --protocol=<http|https>\n"
 "        protocol to be used (default: http)\n"
 "   --uri_style=<path|vhost>\n"
-"        uri style in requests (default: path)\n";
+"        uri style in requests (default: path)\n"
+"   --run-name=obj-name\n"
+"	object id used to store write information (default: obj-name)";
 }
 
 static void usage_exit()
@@ -677,7 +680,7 @@ int main(int argc, const char **argv)
 
   bool show_time = false;
   bool cleanup = true;
-  std::string run_name;
+  std::string run_name(DEFAULT_RUN_NAME);
   std::string prefix;
 
 
