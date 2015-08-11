@@ -439,6 +439,12 @@ void RGWZoneParams::generate_test_instances(list<RGWZoneParams*> &o)
   o.push_back(new RGWZoneParams); 
 }
 
+void RGWRegionMap::generate_test_instances(list<RGWRegionMap*>& o)
+{
+  o.push_back(new RGWRegionMap);
+  o.push_back(new RGWRegionMap);
+}
+
 void RGWOLHInfo::generate_test_instances(list<RGWOLHInfo*> &o)
 {
   RGWOLHInfo *olh = new RGWOLHInfo;

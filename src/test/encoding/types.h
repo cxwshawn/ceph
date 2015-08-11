@@ -238,7 +238,8 @@ TYPE(RGWOLHInfo)
 TYPE(RGWRegion)
 TYPE(RGWZone)
 TYPE(RGWZoneParams)     
-   
+TYPE_NOCOPY(RGWRegionMap)
+
 #include "rgw/rgw_acl.h"
 TYPE(ACLPermission)
 TYPE(ACLGranteeType)
@@ -305,6 +306,9 @@ TYPE(cls_user_list_buckets_ret)
 TYPE(cls_user_get_header_op)
 TYPE(cls_user_get_header_ret)
 TYPE(cls_user_complete_stats_sync_op)
+
+#include "cls/version/cls_version_types.h"
+TYPE(obj_version)
 
 #include "rgw/rgw_common.h"
 TYPE(RGWAccessKey)

@@ -973,8 +973,38 @@ struct RGWRegionMap {
 
   RGWRegionMap() : lock("RGWRegionMap") {}
 
-  void encode(bufferlist& bl) const;
-  void decode(bufferlist::iterator& bl);
+  // void encode(bufferlist& bl) const;
+  // void decode(bufferlist::iterator& bl);
+  void encode(bufferlist& bl) const {
+  ENCODE_START(3, 1, bl);
+  ::encode(regions, bl);
+  ::encode(master_region, bl);
+  ::encode(bucket_quota, bl);
+  ::encode(user_quota, bl);
+  ENCODE_FINISH(bl);
+}
+
+void decode(bufferlist::iterator& bl) {
+  DECODE_START(3, bl);
+  ::decode(regions, bl);
+  ::decode(master_region, bl);
+
+  if (struct_v >= 2)
+    ::decode(bucket_quota, bl);
+  if (struct_v >= 3)
+    ::decode(user_quota, bl);
+  DECODE_FINISH(bl);
+
+  regions_by_api.clear();
+  for (map<string, RGWRegion>::iterator iter = regions.begin();
+       iter != regions.end(); ++iter) {
+    RGWRegion& region = iter->second;
+    regions_by_api[region.api_name] = region;
+    if (region.is_master) {
+      master_region = region.name;
+    }
+  }
+}
 
   void get_params(CephContext *cct, string& pool_name, string& oid);
   int read(CephContext *cct, RGWRados *store);
@@ -984,6 +1014,7 @@ struct RGWRegionMap {
 
   void dump(Formatter *f) const;
   void decode_json(JSONObj *obj);
+  static void generate_test_instances(list<RGWRegionMap*>& o);
 };
 WRITE_CLASS_ENCODER(RGWRegionMap)
 
