@@ -3,6 +3,7 @@
 
 #include "include/encoding.h"
 #include "include/types.h"
+#include "common/Formatter.h"
 
 class JSONObj;
 
@@ -40,8 +41,19 @@ struct obj_version {
             tag.compare(v->tag) == 0);
   }
 
-  void dump(Formatter *f) const;
+  // void dump(Formatter *f) const;
+  void dump(Formatter *f) const
+  {
+    f->dump_int("ver", ver);
+    f->dump_string("tag", tag);
+  }
+
   void decode_json(JSONObj *obj);
+  static void generate_test_instances(std::list<obj_version*>& o)
+  {
+    o.push_back(new obj_version);
+    o.push_back(new obj_version);
+  }
 };
 WRITE_CLASS_ENCODER(obj_version)
 
