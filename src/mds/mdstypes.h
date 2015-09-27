@@ -23,11 +23,10 @@
 
 #include "inode_backtrace.h"
 
+#include <boost/spirit/include/qi.hpp>
 #include <boost/pool/pool.hpp>
 #include "include/assert.h"
-#include "include/hash_namespace.h"
 #include <boost/serialization/strong_typedef.hpp>
-
 
 #define CEPH_FS_ONDISK_MAGIC "ceph fs volume v011"
 
@@ -74,7 +73,7 @@
 #define MDS_TRAVERSE_DISCOVERXLOCK 3    // succeeds on (foreign?) null, xlocked dentries.
 
 
-BOOST_STRONG_TYPEDEF(int32_t, mds_rank_t)
+typedef int32_t mds_rank_t;
 BOOST_STRONG_TYPEDEF(uint64_t, mds_gid_t)
 extern const mds_gid_t MDS_GID_NONE;
 extern const mds_rank_t MDS_RANK_NONE;
@@ -301,7 +300,7 @@ inline bool operator==(const quota_info_t &l, const quota_info_t &r) {
 
 ostream& operator<<(ostream &out, const quota_info_t &n);
 
-CEPH_HASH_NAMESPACE_START
+namespace std {
   template<> struct hash<vinodeno_t> {
     size_t operator()(const vinodeno_t &vino) const { 
       hash<inodeno_t> H;
@@ -309,7 +308,7 @@ CEPH_HASH_NAMESPACE_START
       return H(vino.ino) ^ I(vino.snapid);
     }
   };
-CEPH_HASH_NAMESPACE_END
+} // namespace std
 
 
 
@@ -404,6 +403,13 @@ public:
   void decode(bufferlist::iterator& bl);
 };
 WRITE_CLASS_ENCODER(inline_data_t)
+
+enum {
+  DAMAGE_STATS,     // statistics (dirstat, size, etc)
+  DAMAGE_RSTATS,    // recursive statistics (rstat, accounted_rstat)
+  DAMAGE_FRAGTREE   // fragtree -- repair by searching
+};
+typedef uint32_t damage_flags_t;
 
 /*
  * inode_t
@@ -599,6 +605,7 @@ struct fnode_t {
   snapid_t snap_purged_thru;   // the max_last_destroy snapid we've been purged thru
   frag_info_t fragstat, accounted_fragstat;
   nest_info_t rstat, accounted_rstat;
+  damage_flags_t damage_flags;
 
   void encode(bufferlist &bl) const;
   void decode(bufferlist::iterator& bl);
@@ -803,14 +810,14 @@ inline bool operator<=(const metareqid_t& l, const metareqid_t& r) {
 inline bool operator>(const metareqid_t& l, const metareqid_t& r) { return !(l <= r); }
 inline bool operator>=(const metareqid_t& l, const metareqid_t& r) { return !(l < r); }
 
-CEPH_HASH_NAMESPACE_START
+namespace std {
   template<> struct hash<metareqid_t> {
     size_t operator()(const metareqid_t &r) const { 
       hash<uint64_t> H;
       return H(r.name.num()) ^ H(r.name.type()) ^ H(r.tid);
     }
   };
-CEPH_HASH_NAMESPACE_END
+} // namespace std
 
 
 // cap info for client reconnect
@@ -928,7 +935,7 @@ inline bool operator==(dirfrag_t l, dirfrag_t r) {
   return l.ino == r.ino && l.frag == r.frag;
 }
 
-CEPH_HASH_NAMESPACE_START
+namespace std {
   template<> struct hash<dirfrag_t> {
     size_t operator()(const dirfrag_t &df) const { 
       static rjhash<uint64_t> H;
@@ -936,7 +943,7 @@ CEPH_HASH_NAMESPACE_START
       return H(df.ino) ^ I(df.frag);
     }
   };
-CEPH_HASH_NAMESPACE_END
+} // namespace std
 
 
 
@@ -1597,6 +1604,24 @@ public:
   void dump(Formatter *f) const;
 };
 
+// parse a map of keys/values.
+namespace qi = boost::spirit::qi;
 
+template <typename Iterator>
+struct keys_and_values
+  : qi::grammar<Iterator, std::map<string, string>()>
+{
+    keys_and_values()
+      : keys_and_values::base_type(query)
+    {
+      query =  pair >> *(qi::lit(' ') >> pair);
+      pair  =  key >> '=' >> value;
+      key   =  qi::char_("a-zA-Z_") >> *qi::char_("a-zA-Z_0-9");
+      value = +qi::char_("a-zA-Z_0-9");
+    }
+    qi::rule<Iterator, std::map<string, string>()> query;
+    qi::rule<Iterator, std::pair<string, string>()> pair;
+    qi::rule<Iterator, string()> key, value;
+};
 
 #endif

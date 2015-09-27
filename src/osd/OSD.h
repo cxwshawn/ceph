@@ -135,6 +135,7 @@ enum {
   l_osd_tier_clean,
   l_osd_tier_delay,
   l_osd_tier_proxy_read,
+  l_osd_tier_proxy_write,
 
   l_osd_agent_wake,
   l_osd_agent_skip,
@@ -226,11 +227,9 @@ class DeletingState {
 public:
   const spg_t pgid;
   const PGRef old_pg_state;
-  list<coll_t> colls_to_remove;
   DeletingState(const pair<spg_t, PGRef> &in) :
     lock("DeletingState::lock"), status(QUEUED), stop_deleting(false),
     pgid(in.first), old_pg_state(in.second) {
-      old_pg_state->get_colls(&colls_to_remove);
     }
 
   /// transition status to CLEARING_WAITING
@@ -390,6 +389,7 @@ public:
   OSD *osd;
   CephContext *cct;
   SharedPtrRegistry<spg_t, ObjectStore::Sequencer> osr_registry;
+  ceph::shared_ptr<ObjectStore::Sequencer> meta_osr;
   SharedPtrRegistry<spg_t, DeletingState> deleting_pgs;
   const int whoami;
   ObjectStore *&store;
@@ -589,15 +589,19 @@ public:
     /// the hard upper bound of scrub time
     utime_t deadline;
     ScrubJob() {}
-    explicit ScrubJob(const spg_t& pg, const utime_t& timestamp, bool must = true);
+    explicit ScrubJob(const spg_t& pg, const utime_t& timestamp,
+		      double pool_scrub_min_interval = 0,
+		      double pool_scrub_max_interval = 0, bool must = true);
     /// order the jobs by sched_time
     bool operator<(const ScrubJob& rhs) const;
   };
   set<ScrubJob> sched_scrub_pg;
 
   /// @returns the scrub_reg_stamp used for unregister the scrub job
-  utime_t reg_pg_scrub(spg_t pgid, utime_t t, bool must) {
-    ScrubJob scrub(pgid, t, must);
+  utime_t reg_pg_scrub(spg_t pgid, utime_t t, double pool_scrub_min_interval,
+		       double pool_scrub_max_interval, bool must) {
+    ScrubJob scrub(pgid, t, pool_scrub_min_interval, pool_scrub_max_interval,
+		   must);
     Mutex::Locker l(sched_scrub_lock);
     sched_scrub_pg.insert(scrub);
     return scrub.sched_time;
@@ -649,7 +653,7 @@ public:
   bool agent_valid_iterator;
   int agent_ops;
   int flush_mode_high_count; //once have one pg with FLUSH_MODE_HIGH then flush objects with high speed
-  set<hobject_t> agent_oids;
+  set<hobject_t, hobject_t::BitwiseComparator> agent_oids;
   bool agent_active;
   struct AgentThread : public Thread {
     OSDService *osd;
@@ -708,6 +712,20 @@ public:
   void agent_disable_pg(PG *pg, uint64_t old_priority) {
     Mutex::Locker l(agent_lock);
     _dequeue(pg, old_priority);
+  }
+
+  /// note start of an async (evict) op
+  void agent_start_evict_op() {
+    Mutex::Locker l(agent_lock);
+    ++agent_ops;
+  }
+
+  /// note finish or cancellation of an async (evict) op
+  void agent_finish_evict_op() {
+    Mutex::Locker l(agent_lock);
+    assert(agent_ops > 0);
+    --agent_ops;
+    agent_cond.Signal();
   }
 
   /// note start of an async (flush) op
@@ -1096,44 +1114,46 @@ public:
   ClassHandler  *class_handler;
   int get_nodeid() { return whoami; }
   
-  static hobject_t get_osdmap_pobject_name(epoch_t epoch) { 
+  static ghobject_t get_osdmap_pobject_name(epoch_t epoch) {
     char foo[20];
     snprintf(foo, sizeof(foo), "osdmap.%d", epoch);
-    return hobject_t(sobject_t(object_t(foo), 0)); 
+    return ghobject_t(hobject_t(sobject_t(object_t(foo), 0)));
   }
-  static hobject_t get_inc_osdmap_pobject_name(epoch_t epoch) { 
+  static ghobject_t get_inc_osdmap_pobject_name(epoch_t epoch) {
     char foo[20];
     snprintf(foo, sizeof(foo), "inc_osdmap.%d", epoch);
-    return hobject_t(sobject_t(object_t(foo), 0)); 
+    return ghobject_t(hobject_t(sobject_t(object_t(foo), 0)));
   }
 
-  static hobject_t make_snapmapper_oid() {
-    return hobject_t(
+  static ghobject_t make_snapmapper_oid() {
+    return ghobject_t(hobject_t(
       sobject_t(
 	object_t("snapmapper"),
-	0));
+	0)));
   }
 
-  static hobject_t make_pg_log_oid(spg_t pg) {
+  static ghobject_t make_pg_log_oid(spg_t pg) {
     stringstream ss;
     ss << "pglog_" << pg;
     string s;
     getline(ss, s);
-    return hobject_t(sobject_t(object_t(s.c_str()), 0));
+    return ghobject_t(hobject_t(sobject_t(object_t(s.c_str()), 0)));
   }
   
-  static hobject_t make_pg_biginfo_oid(spg_t pg) {
+  static ghobject_t make_pg_biginfo_oid(spg_t pg) {
     stringstream ss;
     ss << "pginfo_" << pg;
     string s;
     getline(ss, s);
-    return hobject_t(sobject_t(object_t(s.c_str()), 0));
+    return ghobject_t(hobject_t(sobject_t(object_t(s.c_str()), 0)));
   }
-  static hobject_t make_infos_oid() {
+  static ghobject_t make_infos_oid() {
     hobject_t oid(sobject_t("infos", CEPH_NOSNAP));
-    return oid;
+    return ghobject_t(oid);
   }
-  static void recursive_remove_collection(ObjectStore *store, coll_t tmp);
+  static void recursive_remove_collection(ObjectStore *store,
+					  spg_t pgid,
+					  coll_t tmp);
 
   /**
    * get_osd_initial_compat_set()
@@ -1162,6 +1182,8 @@ private:
   void write_superblock();
   void write_superblock(ObjectStore::Transaction& t);
   int read_superblock();
+
+  void clear_temp_objects();
 
   CompatSet osd_compat;
 
@@ -1377,6 +1399,13 @@ public:
 	 ++i) {
       clear_session_waiting_on_pg(session, *i);
     }
+    /* Messages have connection refs, we need to clear the
+     * connection->session->message->connection
+     * cycles which result.
+     * Bug #12338
+     */
+    session->waiting_on_map.clear();
+    session->waiting_for_pg.clear();
   }
   void register_session_waiting_on_pg(Session *session, spg_t pgid) {
     Mutex::Locker l(session_waiting_lock);
@@ -1746,6 +1775,7 @@ private:
 	(*i)->put("PeeringWQ");
       }
     }
+    using ThreadPool::BatchWorkQueue<PG>::_process;
     void _process_finish(const list<PG *> &pgs) {
       for (list<PG*>::const_iterator i = pgs.begin();
 	   i != pgs.end();
@@ -1787,14 +1817,14 @@ private:
   void handle_osd_map(class MOSDMap *m);
   void note_down_osd(int osd);
   void note_up_osd(int osd);
-  
+
   bool advance_pg(
     epoch_t advance_to, PG *pg,
     ThreadPool::TPHandle &handle,
     PG::RecoveryCtx *rctx,
     set<boost::intrusive_ptr<PG> > *split_pgs
   );
-  void advance_map(ObjectStore::Transaction& t, C_Contexts *tfin);
+  void advance_map();
   void consume_map();
   void activate_map();
 
@@ -1983,6 +2013,12 @@ protected:
   void queue_want_up_thru(epoch_t want);
   void send_alive();
 
+  // -- full map requests --
+  epoch_t requested_full_first, requested_full_last;
+
+  void request_full_map(epoch_t first, epoch_t last);
+  void got_full_map(epoch_t e);
+
   // -- failures --
   map<int,utime_t> failure_queue;
   map<int,entity_inst_t> failure_pending;
@@ -2122,6 +2158,9 @@ protected:
       osd->osd_lock.Unlock();
       delete c;
     }
+    void _process(Command *c, ThreadPool::TPHandle &tp) {
+      _process(c);
+    }
     void _clear() {
       while (!osd->command_queue.empty()) {
 	Command *c = osd->command_queue.front();
@@ -2140,7 +2179,7 @@ protected:
   utime_t defer_recovery_until;
   int recovery_ops_active;
 #ifdef DEBUG_RECOVERY_OIDS
-  map<spg_t, set<hobject_t> > recovery_oids;
+  map<spg_t, set<hobject_t, hobject_t::BitwiseComparator> > recovery_oids;
 #endif
 
   struct RecoveryWQ : public ThreadPool::WorkQueue<PG> {
@@ -2177,6 +2216,7 @@ protected:
       osd->do_recovery(pg, handle);
       pg->put("RecoveryWQ");
     }
+    using ThreadPool::WorkQueue<PG>::_process;
     void _clear() {
       while (!osd->recovery_queue.empty()) {
 	PG *pg = osd->recovery_queue.front();
@@ -2231,6 +2271,7 @@ protected:
       remove_queue.pop_front();
       return item;
     }
+    using ThreadPool::WorkQueueVal<pair<PGRef, DeletingStateRef> >::_process;
     void _process(pair<PGRef, DeletingStateRef>, ThreadPool::TPHandle &);
     void _clear() {
       remove_queue.clear();

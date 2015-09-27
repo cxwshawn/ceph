@@ -19,10 +19,9 @@
 #include "lockdep.h"
 
 #include "include/unordered_map.h"
-#include "include/hash_namespace.h"
 
 #if defined(__FreeBSD__) && defined(__LP64__)	// On FreeBSD pthread_t is a pointer.
-CEPH_HASH_NAMESPACE_START
+namespace std {
   template<>
     struct hash<pthread_t>
     {
@@ -30,7 +29,7 @@ CEPH_HASH_NAMESPACE_START
       operator()(pthread_t __x) const
       { return (uintptr_t)__x; }
     };
-CEPH_HASH_NAMESPACE_END
+} // namespace std
 #endif
 
 /******* Constants **********/
@@ -67,6 +66,7 @@ void lockdep_register_ceph_context(CephContext *cct)
 {
   pthread_mutex_lock(&lockdep_mutex);
   if (g_lockdep_ceph_ctx == NULL) {
+    g_lockdep = true;
     g_lockdep_ceph_ctx = cct;
     lockdep_dout(0) << "lockdep start" << dendl;
 

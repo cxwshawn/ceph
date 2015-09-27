@@ -28,7 +28,7 @@ int RGWMongoose::write_data(const char *buf, int len)
 }
 
 RGWMongoose::RGWMongoose(mg_connection *_conn, int _port) : conn(_conn), port(_port), header_done(false), sent_header(false), has_content_length(false),
-                                                 explicit_keepalive(false)
+                                                 explicit_keepalive(false), explicit_conn_close(false)
 {
 }
 
@@ -93,6 +93,7 @@ void RGWMongoose::init_env(CephContext *cct)
 
     if (strcasecmp(header->name, "connection") == 0) {
       explicit_keepalive = (strcasecmp(header->value, "keep-alive") == 0);
+      explicit_conn_close = (strcasecmp(header->value, "close") == 0);
     }
 
     int len = strlen(header->name) + 5; /* HTTP_ prepended */
@@ -142,6 +143,9 @@ int RGWMongoose::send_status(const char *status, const char *status_name)
   bl.append(header_data);
   header_data = bl;
 
+  int status_num = atoi(status);
+  mg_set_http_status(conn, status_num);
+
   return 0;
 }
 
@@ -178,6 +182,8 @@ int RGWMongoose::complete_header()
 
   if (explicit_keepalive)
     header_data.append("Connection: Keep-Alive\r\n");
+  else if (explicit_conn_close)
+    header_data.append("Connection: close\r\n");
 
   header_data.append("\r\n");
 
