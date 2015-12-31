@@ -405,7 +405,7 @@ DAEMONOPTS="
         admin socket = $CEPH_OUT_DIR/\$name.asok
 	chdir = \"\"
 	pid file = $CEPH_OUT_DIR/\$name.pid
-        heartbeat file = $CEPH_OUT_DIR/\$name.heartbeat
+#        heartbeat file = $CEPH_OUT_DIR/\$name.heartbeat
 "
 
 
@@ -469,8 +469,8 @@ $CMDSDEBUG
 $extra_conf
 [osd]
 $DAEMONOPTS
-        osd data = $CEPH_DEV_DIR/osd\$id
-        osd journal = $journal_path
+#        osd data = $CEPH_DEV_DIR/osd\$id
+#        osd journal = $journal_path
         osd journal size = 100
         osd class tmp = out
         osd class dir = $OBJCLASS_PATH
@@ -571,10 +571,13 @@ if [ "$start_osd" -eq 1 ]; then
 		    cat <<EOF >> $conf_fn
 [osd.$osd]
         host = $HOSTNAME
+osd data = /osd$osd/osd$osd
+osd journal = /osd$osd/osd$osd.journal
+heartbeat file = /osd$osd/osd$osd.hearbeat
 EOF
-		    rm -rf $CEPH_DEV_DIR/osd$osd || true
-		    for f in $CEPH_DEV_DIR/osd$osd/* ; do btrfs sub delete $f || true ; done || true
-		    mkdir -p $CEPH_DEV_DIR/osd$osd
+		    rm -rf /osd$osd/osd$osd || true
+		    for f in /osd$osd/osd$osd/* ; do btrfs sub delete $f || true ; done || true
+		    mkdir -p /osd$osd/osd$osd
 	    fi
 
 	    uuid=`uuidgen`
@@ -583,7 +586,7 @@ EOF
 	    $SUDO $CEPH_ADM osd crush add osd.$osd 1.0 host=$HOSTNAME root=default
 	    $SUDO $CEPH_BIN/ceph-osd -i $osd $ARGS --mkfs --mkkey --osd-uuid $uuid
 
-	    key_fn=$CEPH_DEV_DIR/osd$osd/keyring
+	    key_fn=/osd$osd//osd$osd/keyring
 	    echo adding osd$osd key to auth repository
 	    $SUDO $CEPH_ADM -i $key_fn auth add osd.$osd osd "allow *" mon "allow profile osd"
 	fi
