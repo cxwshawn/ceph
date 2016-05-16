@@ -144,8 +144,8 @@ public:
   ~CopyFromCallback() {}
 
   virtual void finish(ReplicatedPG::CopyCallbackResults results_) {
-    results = results_.get<1>();
-    int r = results_.get<0>();
+    results = std::get<1>(results_);
+    int r = std::get<0>(results_);
     retval = r;
 
     // for finish_copyfrom
@@ -2802,8 +2802,8 @@ public:
       start(ceph_clock_now(NULL)) {}
 
   virtual void finish(ReplicatedPG::CopyCallbackResults results) {
-    ReplicatedPG::CopyResults *results_data = results.get<1>();
-    int r = results.get<0>();
+    ReplicatedPG::CopyResults *results_data = std::get<1>(results);
+    int r = std::get<0>(results);
     pg->finish_promote(r, results_data, obc);
     pg->osd->logger->tinc(l_osd_tier_promote_lat, ceph_clock_now(NULL) - start);
   }
@@ -4252,7 +4252,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	    maybe_crc = oi.data_digest;
 	  ctx->pending_async_reads.push_back(
 	    make_pair(
-	      boost::make_tuple(op.extent.offset, op.extent.length, op.flags),
+	      std::make_tuple(op.extent.offset, op.extent.length, op.flags),
 	      make_pair(&osd_op.outdata,
 			new FillInVerifyExtent(&op.extent.length, &osd_op.rval,
 				&osd_op.outdata, maybe_crc, oi.size, osd,
@@ -4336,7 +4336,7 @@ int ReplicatedPG::do_osd_ops(OpContext *ctx, vector<OSDOp>& ops)
 	// translate sparse read to a normal one if not supported
 	ctx->pending_async_reads.push_back(
 	  make_pair(
-	    boost::make_tuple(op.extent.offset, op.extent.length, op.flags),
+	    std::make_tuple(op.extent.offset, op.extent.length, op.flags),
 	    make_pair(&osd_op.outdata, new ToSparseReadResult(osd_op.outdata,
 							      op.extent.length))));
 	dout(10) << " async_read (was sparse_read) noted for " << soid << dendl;
@@ -7045,7 +7045,7 @@ int ReplicatedPG::fill_in_copy_get(
 	async_read_started = true;
 	ctx->pending_async_reads.push_back(
 	  make_pair(
-	    boost::make_tuple(cursor.data_offset, max_read, osd_op.op.flags),
+	    std::make_tuple(cursor.data_offset, max_read, osd_op.op.flags),
 	    make_pair(&bl, cb)));
         result = max_read;
 	cb->len = result;

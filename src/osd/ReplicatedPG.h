@@ -18,7 +18,7 @@
 #define CEPH_REPLICATEDPG_H
 
 #include <boost/optional/optional_io.hpp>
-#include <boost/tuple/tuple.hpp>
+// #include <boost/tuple/tuple.hpp>
 
 #include "include/assert.h" 
 #include "include/unordered_map.h"
@@ -40,6 +40,8 @@
 #include "PGBackend.h"
 #include "ReplicatedBackend.h"
 #include "ECBackend.h"
+#include <tuple>
+// using namespace std;
 
 class MOSDSubOpReply;
 
@@ -179,7 +181,7 @@ public:
    * The implementer is responsible for making sure that the CopyCallback
    * can associate itself with the correct copy operation.
    */
-  typedef boost::tuple<int, CopyResults*> CopyCallbackResults;
+  typedef std::tuple<int, CopyResults*> CopyCallbackResults;
   class CopyCallback : public GenContext<CopyCallbackResults> {
   protected:
     CopyCallback() {}
@@ -605,7 +607,7 @@ public:
     }
 
     // pending async reads <off, len, op_flags> -> <outbl, outr>
-    list<pair<boost::tuple<uint64_t, uint64_t, unsigned>,
+    list<pair<std::tuple<uint64_t, uint64_t, unsigned>,
 	      pair<bufferlist*, Context*> > > pending_async_reads;
     int async_read_result;
     int inflightreads;
@@ -674,7 +676,7 @@ public:
       assert(!op_t);
       if (reply)
 	reply->put();
-      for (list<pair<boost::tuple<uint64_t, uint64_t, unsigned>,
+      for (list<pair<std::tuple<uint64_t, uint64_t, unsigned>,
 		     pair<bufferlist*, Context*> > >::iterator i =
 	     pending_async_reads.begin();
 	   i != pending_async_reads.end();
